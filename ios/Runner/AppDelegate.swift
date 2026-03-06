@@ -1,7 +1,6 @@
 ﻿import UIKit
 import Flutter
 import Network
-import NetworkExtension
 import AVFoundation
 import CoreLocation
 import Contacts
@@ -9,7 +8,7 @@ import EventKit
 import Photos
 import MachO
 
-@main
+@UIApplicationMain
 @objc class AppDelegate: FlutterAppDelegate {
 
     override func application(
@@ -116,11 +115,13 @@ import MachO
     }
 
     private func getVpnStatus(result: @escaping FlutterResult) {
-        NEVPNManager.shared().loadFromPreferences { _ in
-            let s = NEVPNManager.shared().connection.status
-            result(["isVpn": s == .connected || s == .connecting,
-                    "vpnName": NEVPNManager.shared().localizedDescription ?? ""])
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { path in
+            monitor.cancel()
+            let isVpn = path.availableInterfaces.contains { $0.type == .other }
+            DispatchQueue.main.async { result(["isVpn": isVpn, "vpnName": isVpn ? "VPN" : ""]) }
         }
+        monitor.start(queue: DispatchQueue(label: "vpn.check"))
     }
 
     // MARK: - Permissions
