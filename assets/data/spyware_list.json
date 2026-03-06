@@ -1,0 +1,31 @@
+{
+  "spyware_bundle_ids": [
+    "com.mspy.app", "com.flexispy.app", "com.highster.app",
+    "com.spyera.app", "com.ikeymonitor.app", "com.hoverwatch.app",
+    "com.spyzie.app", "com.cocospy.app", "com.thetruthspy.app",
+    "com.mobistealth.app", "com.spybubble.app", "com.pegasus.agent",
+    "cydia", "com.saurik.substrate", "org.coolstar.sileo"
+  ],
+  "jailbreak_paths": [
+    "/Applications/Cydia.app", "/Applications/Sileo.app",
+    "/bin/bash", "/bin/sh", "/etc/apt", "/etc/ssh/sshd_config",
+    "/private/var/lib/apt", "/private/var/lib/cydia",
+    "/private/var/mobile/Library/SBSettings/Themes",
+    "/private/var/stash", "/usr/bin/sshd", "/usr/sbin/sshd",
+    "/var/cache/apt", "/var/lib/apt", "/var/lib/cydia",
+    "/Library/MobileSubstrate/MobileSubstrate.dylib",
+    "/usr/libexec/sftp-server", "/usr/libexec/ssh-keysign",
+    "/private/etc/dpkg/origins/debian", "/bin/ps",
+    "/usr/bin/apt", "/usr/bin/wget", "/usr/bin/curl",
+    "/private/var/mobileLibrary/SBSettingsThemes/"
+  ],
+  "suspicious_processes": [
+    "substrated", "sshd", "dropbear", "frida-server",
+    "debugserver", "cycript", "cynject", "substitute-loader"
+  ],
+  "pegasus_indicators": [
+    "smsverification.org", "getlatestnews.net",
+    "7h4k.com", "my1secret.com", "hotpricedeal.net",
+    "roleaboutd", "msgacnt", "libtouchregd"
+  ]
+}

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App identity -->
+	<key>CFBundleName</key>
+	<string>iPhone Security</string>
+	<key>CFBundleDisplayName</key>
+	<string>iPhone Security</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.yourname.iphoneSecurity</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>MinimumOSVersion</key>
+	<string>14.0</string>
+
+	<!-- Supported orientations -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+
+	<!-- Privacy descriptions (required for App Review / Developer distribution) -->
+	<key>NSCameraUsageDescription</key>
+	<string>للتحقق من حالة إذن الكاميرا في الجهاز</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>للتحقق من حالة إذن الميكروفون في الجهاز</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>لمعرفة شبكة WiFi المتصلة وفحص الشبكة</string>
+	<key>NSContactsUsageDescription</key>
+	<string>للتحقق من صلاحيات الوصول لجهات الاتصال</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>للتحقق من صلاحيات الوصول للصور</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>للتحقق من صلاحيات الوصول للتقويم</string>
+
+	<!-- URL Schemes we check (to detect jailbreak apps) -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>cydia</string>
+		<string>sileo</string>
+		<string>zbra</string>
+		<string>filza</string>
+		<string>activator</string>
+	</array>
+
+	<!-- Enable background network monitoring -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+
+	<!-- App Transport Security -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
+
+	<!-- Status bar -->
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleLightContent</string>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
+</dict>
+</plist>
