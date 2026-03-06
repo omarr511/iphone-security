@@ -23,7 +23,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
   void initState() {
     super.initState();
     _refresh();
-    Connectivity().onConnectivityChanged.listen(_onConnChange);
+    Connectivity().onConnectivityChanged.listen((result) => _onConnChange([result]));
   }
 
   void _onConnChange(List<ConnectivityResult> result) {

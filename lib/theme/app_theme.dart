@@ -44,7 +44,7 @@ class AppTheme {
         labelSmall:    TextStyle(color: fg2, fontSize: 11),
       ),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: bg2,
       elevation: 0,
       shape: RoundedRectangleBorder(
