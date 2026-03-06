@@ -13,10 +13,14 @@ void main() async {
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
-    return false;
+    // Treat as handled so the app doesn't terminate on an unhandled Dart error.
+    // (In release mode, returning false can crash/close the app immediately.)
+    debugPrint('Unhandled error: $error');
+    debugPrintStack(stackTrace: stack);
+    return true;
   };
 
-  SystemChrome.setPreferredOrientations([
+  await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
