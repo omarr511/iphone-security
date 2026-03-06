@@ -3,10 +3,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../theme/app_theme.dart';
-import '../models/finding.dart';
-import '../services/security_scanner.dart';
+import '../services/scan_scheduler_service.dart';
 import 'scan_screen.dart';
-import 'results_screen.dart';
 import 'network_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -20,11 +18,20 @@ class _HomeScreenState extends State<HomeScreen> {
   String _deviceModel = 'جهازك';
   String _iosVersion  = '';
   int _selectedTab    = 0;
+  final _scheduler    = ScanSchedulerService();
+  AutoScanSnapshot? _lastAutoScan;
 
   @override
   void initState() {
     super.initState();
     _loadDeviceInfo();
+    _startAutoMonitor();
+  }
+
+  @override
+  void dispose() {
+    _scheduler.stop();
+    super.dispose();
   }
 
   Future<void> _loadDeviceInfo() async {
@@ -35,6 +42,19 @@ class _HomeScreenState extends State<HomeScreen> {
         _iosVersion  = 'iOS ${info.systemVersion}';
       });
     } catch (_) {}
+  }
+
+  Future<void> _startAutoMonitor() async {
+    await _scheduler.start(interval: const Duration(minutes: 20));
+    await _refreshAutoMonitor();
+  }
+
+  Future<void> _refreshAutoMonitor() async {
+    final snapshot = await _scheduler.getLastSnapshot();
+    if (!mounted) return;
+    setState(() {
+      _lastAutoScan = snapshot;
+    });
   }
 
   @override
@@ -115,6 +135,8 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildScanCard(),
+          const SizedBox(height: 12),
+          _buildAutoMonitorCard(),
           const SizedBox(height: 20),
           _buildQuickChecksGrid(),
           const SizedBox(height: 20),
@@ -222,6 +244,55 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildAutoMonitorCard() {
+    final snapshot = _lastAutoScan;
+    final hasSnapshot = snapshot != null;
+    final riskLevel = snapshot?.riskLevel ?? 'SAFE';
+    final riskColor = _riskColor(riskLevel);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.bg2,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.shield_moon_rounded, color: riskColor, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'المراقبة الدورية',
+                  style: TextStyle(
+                    color: AppTheme.fg,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  hasSnapshot
+                      ? 'آخر فحص تلقائي: ${_formatAutoTime(snapshot.timestamp)} • ${snapshot.riskLevel} (${snapshot.score}/100)'
+                      : 'مفعّلة — سيتم حفظ أول نتيجة تلقائياً بعد اكتمال أول فحص سريع',
+                  style: const TextStyle(color: AppTheme.fg2, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: _refreshAutoMonitor,
+            icon: const Icon(Icons.refresh_rounded, color: AppTheme.fg2, size: 18),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(delay: 200.ms, duration: 300.ms);
   }
 
   Widget _buildCheckTile(_CheckItem item) {
@@ -391,6 +462,27 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  Color _riskColor(String riskLevel) {
+    switch (riskLevel) {
+      case 'CRITICAL':
+        return AppTheme.red;
+      case 'HIGH':
+        return AppTheme.orange;
+      case 'MEDIUM':
+        return AppTheme.yellow;
+      default:
+        return AppTheme.green;
+    }
+  }
+
+  String _formatAutoTime(DateTime date) {
+    final h = date.hour.toString().padLeft(2, '0');
+    final m = date.minute.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    final mo = date.month.toString().padLeft(2, '0');
+    return '$d/$mo $h:$m';
   }
 }
 

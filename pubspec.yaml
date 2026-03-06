@@ -47,4 +47,5 @@ flutter:
   assets:
     - assets/data/suspicious_domains.json
     - assets/data/spyware_list.json
+    - assets/icons/
     - assets/images/

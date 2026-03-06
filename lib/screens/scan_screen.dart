@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import '../theme/app_theme.dart';
-import '../models/finding.dart';
 import '../services/security_scanner.dart';
 import 'results_screen.dart';
 
@@ -19,7 +18,6 @@ class _ScanScreenState extends State<ScanScreen> {
   double  _progress   = 0.0;
   String  _statusText = 'جاري التهيئة …';
   bool    _done       = false;
-  ScanResult? _result;
 
   static const _scanSteps = [
     'فحص مؤشرات كسر الحماية …',
@@ -46,9 +44,9 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   Future<void> _runScan() async {
-    final result = await _scanner.runFullScan();
+    final result = await _scanner.runScan(scanType: widget.scanType);
     if (mounted) {
-      setState(() { _done = true; _result = result; });
+      setState(() { _done = true; });
       await Future.delayed(const Duration(milliseconds: 800));
       if (mounted) {
         Navigator.of(context).pushReplacement(

@@ -1,5 +1,4 @@
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter/services.dart';
 import '../models/finding.dart';
 import 'jailbreak_service.dart';
@@ -17,31 +16,39 @@ class SecurityScannerService {
   Function(double, String)? onProgress;
 
   Future<ScanResult> runFullScan() async {
+    return runScan(scanType: 'full');
+  }
+
+  Future<ScanResult> runScan({String scanType = 'full'}) async {
     final findings = <Finding>[];
     _progress(0.0, 'جاري تهيئة الفحص …');
 
     // Device info
     final deviceInfo = await _getDeviceInfo();
-    _progress(0.1, 'فحص كسر الحماية …');
+    final mode = scanType.toLowerCase();
 
-    // Jailbreak
-    final jbFindings = await _jailbreakSvc.check();
-    findings.addAll(jbFindings);
-    _progress(0.3, 'فحص الشبكة والاتصالات …');
+    if (mode == 'full' || mode == 'quick' || mode == 'jailbreak') {
+      _progress(0.12, 'فحص كسر الحماية …');
+      findings.addAll(await _jailbreakSvc.check());
+    }
 
-    // Network
-    final netFindings = await _networkSvc.scan();
-    findings.addAll(netFindings);
-    _progress(0.55, 'فحص الصلاحيات والتطبيقات …');
+    if (mode == 'full' || mode == 'quick' || mode == 'network') {
+      _progress(0.35, 'فحص الشبكة والاتصالات …');
+      findings.addAll(await _networkSvc.scan(includeRealtimeHeuristics: true));
+    }
 
-    // Permissions & profiles
-    final permFindings = await _permissionSvc.check();
-    findings.addAll(permFindings);
-    _progress(0.75, 'فحص النظام …');
+    if (mode == 'full' || mode == 'quick' || mode == 'permissions' || mode == 'mdm') {
+      _progress(0.62, 'فحص الصلاحيات والإدارة …');
+      findings.addAll(await _permissionSvc.check(mdmOnly: mode == 'mdm'));
+    }
 
-    // System checks
-    findings.addAll(await _systemChecks());
-    _progress(0.9, 'تحليل النتائج …');
+    if (mode == 'full' || mode == 'quick') {
+      _progress(0.82, 'فحص النظام …');
+      findings.addAll(await _systemChecks());
+    }
+
+    _progress(0.92, 'تحليل النتائج …');
+    _applyRiskCorrelation(findings);
 
     // If no critical/high issues add SAFE finding
     final serious = findings.where(
@@ -59,7 +66,7 @@ class SecurityScannerService {
     _progress(1.0, 'اكتمل الفحص');
 
     return ScanResult(
-      findings:    findings,
+      findings:    _dedupeFindings(findings),
       scanTime:    DateTime.now(),
       deviceModel: deviceInfo['model'] ?? 'Unknown',
       iosVersion:  deviceInfo['version'] ?? '?',
@@ -106,6 +113,28 @@ class SecurityScannerService {
           timestamp: DateTime.now(),
         ));
       }
+
+      final proxyEnabled = data['proxyEnabled'] as bool? ?? false;
+      final proxyHost = data['proxyHost'] as String? ?? '';
+      if (proxyEnabled) {
+        findings.add(Finding(
+          severity: Severity.medium,
+          category: 'Proxy نشط',
+          message: 'تم اكتشاف إعداد Proxy على الجهاز${proxyHost.isNotEmpty ? ': $proxyHost' : ''} — قد يُستخدم لاعتراض حركة البيانات',
+          details: {'proxy': proxyHost},
+          timestamp: DateTime.now(),
+        ));
+      }
+
+      final isDevMode = data['isDeveloperMode'] as bool? ?? false;
+      if (isDevMode) {
+        findings.add(Finding(
+          severity: Severity.info,
+          category: 'Developer Mode',
+          message: 'وضع المطوّر مفعّل على الجهاز',
+          timestamp: DateTime.now(),
+        ));
+      }
     } catch (_) {}
     return findings;
   }
@@ -126,5 +155,43 @@ class SecurityScannerService {
 
   void _progress(double val, String msg) {
     onProgress?.call(val, msg);
+  }
+
+  void _applyRiskCorrelation(List<Finding> findings) {
+    final hasJailbreak = findings.any((f) =>
+        f.category.contains('كسر الحماية') || f.category.contains('Sandbox'));
+    final hasNetworkThreat = findings.any((f) =>
+        f.category.contains('اتصال مشبوه') || f.category.contains('DNS مشبوه'));
+    final hasMdm = findings.any((f) => f.category.contains('MDM'));
+
+    if (hasJailbreak && hasNetworkThreat) {
+      findings.add(Finding(
+        severity: Severity.critical,
+        category: 'ترابط تهديدات',
+        message: 'كسر حماية + نشاط شبكة مشبوه = احتمالية اختراق متقدم مرتفعة',
+        timestamp: DateTime.now(),
+      ));
+    }
+
+    if (hasMdm && hasNetworkThreat) {
+      findings.add(Finding(
+        severity: Severity.high,
+        category: 'مراقبة مُدارة',
+        message: 'وجود MDM مع مؤشرات شبكة مشبوهة يستدعي التحقق الفوري من الجهة المديرة',
+        timestamp: DateTime.now(),
+      ));
+    }
+  }
+
+  List<Finding> _dedupeFindings(List<Finding> findings) {
+    final seen = <String>{};
+    final out = <Finding>[];
+    for (final finding in findings) {
+      final key = '${finding.severity.label}|${finding.category}|${finding.message}';
+      if (seen.add(key)) {
+        out.add(finding);
+      }
+    }
+    return out;
   }
 }

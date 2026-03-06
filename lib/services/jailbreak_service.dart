@@ -1,11 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' as services;
 import '../models/finding.dart';
 
 /// Detects jailbreak indicators using both Dart-level checks
 /// and native platform channel calls to Swift code.
 class JailbreakService {
-  static const _channel = MethodChannel('com.security.checker/jailbreak');
+  static const _channel = services.MethodChannel('com.security.checker/jailbreak');
 
   // Paths that exist only on jailbroken devices
   static const _jailbreakPaths = [
@@ -49,6 +50,9 @@ class JailbreakService {
     // 4. Native checks via Swift
     findings.addAll(await _nativeChecks());
 
+    // 5. Spyware signatures from threat intel
+    findings.addAll(await _checkSpywareSignatures());
+
     return findings;
   }
 
@@ -56,7 +60,11 @@ class JailbreakService {
   Future<List<Finding>> _checkFilesystem() async {
     final found = <String>[];
     for (final path in _jailbreakPaths) {
-      if (File(path).existsSync()) found.add(path);
+      try {
+        if (File(path).existsSync()) {
+          found.add(path);
+        }
+      } catch (_) {}
     }
     if (found.isEmpty) return [];
     return [
@@ -74,8 +82,10 @@ class JailbreakService {
   Future<List<Finding>> _checkUrlSchemes() async {
     // This check is done via the native platform channel
     try {
+      final intelSchemes = await _loadSuspiciousSchemesFromIntel();
+      final allSchemes = {..._suspiciousSchemes, ...intelSchemes}.toList();
       final result = await _channel.invokeMethod<List>('checkUrlSchemes',
-          {'schemes': _suspiciousSchemes});
+          {'schemes': allSchemes});
       final detected = result?.cast<String>() ?? [];
       if (detected.isEmpty) return [];
       return [
@@ -131,6 +141,57 @@ class JailbreakService {
       ];
     } catch (_) {
       return [];
+    }
+  }
+
+  Future<List<Finding>> _checkSpywareSignatures() async {
+    try {
+      final raw = await services.rootBundle.loadString('assets/data/spyware_list.json');
+      final intel = jsonDecode(raw) as Map<String, dynamic>;
+      final indicators = List<String>.from(intel['pegasus_indicators'] ?? const []);
+      if (indicators.isEmpty) return [];
+
+      return [
+        Finding(
+          severity: Severity.info,
+          category: 'قاعدة بيانات التهديدات',
+          message: 'تم تحميل ${indicators.length} مؤشر تهديد متقدم (Pegasus/Spyware)',
+          details: {'indicators_count': indicators.length},
+          timestamp: DateTime.now(),
+        )
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<String>> _loadSuspiciousSchemesFromIntel() async {
+    try {
+      final raw = await services.rootBundle.loadString('assets/data/spyware_list.json');
+      final intel = jsonDecode(raw) as Map<String, dynamic>;
+      final bundleIds = List<String>.from(intel['spyware_bundle_ids'] ?? const []);
+
+      final schemes = <String>{};
+      for (final id in bundleIds) {
+        final clean = id.trim().toLowerCase();
+        if (clean.isEmpty) continue;
+
+        if (clean.contains('.')) {
+          final first = clean.split('.').first;
+          if (first.isNotEmpty && first.length > 2) {
+            schemes.add('$first://');
+          }
+          final last = clean.split('.').last;
+          if (last.isNotEmpty && last.length > 2) {
+            schemes.add('$last://');
+          }
+        } else {
+          schemes.add('$clean://');
+        }
+      }
+      return schemes.toList();
+    } catch (_) {
+      return const [];
     }
   }
 }

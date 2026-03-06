@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/services.dart' hide NetworkInterface;
 import 'package:flutter/services.dart' as services;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:network_info_plus/network_info_plus.dart';
@@ -8,14 +8,25 @@ import '../models/finding.dart';
 class NetworkService {
   static const _channel = services.MethodChannel('com.security.checker/network');
   final NetworkInfo _networkInfo = NetworkInfo();
+  final Connectivity _connectivity = Connectivity();
 
-  Future<List<Finding>> scan() async {
+  Future<List<Finding>> scan({bool includeRealtimeHeuristics = false}) async {
     final findings = <Finding>[];
     findings.addAll(await _checkActiveConnections());
     findings.addAll(await _checkVpnStatus());
+    findings.addAll(await _checkProxyStatus());
     findings.addAll(await _checkDnsServers());
     findings.addAll(await _checkNetworkInterface());
+    if (includeRealtimeHeuristics) {
+      findings.addAll(await _checkConnectivityHeuristics());
+    }
     return findings;
+  }
+
+  Stream<List<Finding>> watchThreats({
+    Duration interval = const Duration(minutes: 2),
+  }) {
+    return Stream.periodic(interval).asyncMap((_) => scan(includeRealtimeHeuristics: true));
   }
 
   // ── Active connections via native ─────────────────────────────
@@ -91,6 +102,37 @@ class NetworkService {
     }
   }
 
+  // ── Proxy status ───────────────────────────────────────────────
+  Future<List<Finding>> _checkProxyStatus() async {
+    try {
+      final result = await _channel.invokeMethod<Map>('getProxyStatus');
+      final data = Map<String, dynamic>.from(result ?? {});
+      final enabled = data['enabled'] as bool? ?? false;
+      if (!enabled) {
+        return [];
+      }
+
+      final host = data['host'] as String? ?? '';
+      final port = data['port']?.toString() ?? '';
+      final proxy = [host, port].where((v) => v.isNotEmpty).join(':');
+
+      return [
+        Finding(
+          severity: Severity.medium,
+          category: 'Proxy نشط',
+          message: 'تم اكتشاف إعداد Proxy${proxy.isNotEmpty ? ' ($proxy)' : ''} — قد يُعيد توجيه البيانات',
+          details: {
+            'proxy_host': host,
+            'proxy_port': port,
+          },
+          timestamp: DateTime.now(),
+        )
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
+
   // ── DNS servers ───────────────────────────────────────────────
   Future<List<Finding>> _checkDnsServers() async {
     try {
@@ -130,11 +172,12 @@ class NetworkService {
     try {
       final ssid = await _networkInfo.getWifiName();
       if (ssid != null && ssid.isNotEmpty) {
+        final cleanSsid = ssid.replaceAll('"', '').trim();
         return [
           Finding(
             severity: Severity.info,
             category: 'الشبكة',
-            message: 'متصل بـ WiFi: $ssid',
+            message: 'متصل بـ WiFi: $cleanSsid',
             timestamp: DateTime.now(),
           )
         ];
@@ -149,11 +192,58 @@ class NetworkService {
   Future<Map<String, String>> getConnectionInfo() async {
     final info = <String, String>{};
     try {
-      info['ssid']   = await _networkInfo.getWifiName() ?? 'غير متاح';
+      info['ssid']   = (await _networkInfo.getWifiName() ?? 'غير متاح').replaceAll('"', '');
       info['ip']     = await _networkInfo.getWifiIP() ?? 'غير متاح';
       info['subnet'] = await _networkInfo.getWifiSubmask() ?? 'غير متاح';
       info['gateway']= await _networkInfo.getWifiGatewayIP() ?? 'غير متاح';
+      final connectivity = await _connectivity.checkConnectivity();
+      info['status'] = switch (connectivity) {
+        ConnectivityResult.wifi => 'WiFi',
+        ConnectivityResult.mobile => 'Cellular',
+        ConnectivityResult.ethernet => 'Ethernet',
+        ConnectivityResult.vpn => 'VPN',
+        _ => 'Offline',
+      };
     } catch (_) {}
     return info;
+  }
+
+  Future<List<Finding>> _checkConnectivityHeuristics() async {
+    final findings = <Finding>[];
+    try {
+      final connectivity = await _connectivity.checkConnectivity();
+      final status = connectivity;
+
+      if (status == ConnectivityResult.none) {
+        findings.add(Finding(
+          severity: Severity.info,
+          category: 'الاتصال',
+          message: 'الجهاز غير متصل بالشبكة حالياً',
+          timestamp: DateTime.now(),
+        ));
+        return findings;
+      }
+
+      final ssidRaw = await _networkInfo.getWifiName();
+      final ssid = (ssidRaw ?? '').replaceAll('"', '').toLowerCase().trim();
+
+      final weakSsidMarkers = [
+        'free',
+        'public',
+        'open',
+        'guest',
+        'wifi',
+      ];
+
+      if (ssid.isNotEmpty && weakSsidMarkers.any(ssid.contains)) {
+        findings.add(Finding(
+          severity: Severity.medium,
+          category: 'شبكة عامة',
+          message: 'شبكة WiFi الحالية تبدو عامة/مفتوحة ($ssid) — يفضّل استخدام VPN موثوق',
+          timestamp: DateTime.now(),
+        ));
+      }
+    } catch (_) {}
+    return findings;
   }
 }

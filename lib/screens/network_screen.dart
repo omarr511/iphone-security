@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -14,6 +16,7 @@ class NetworkScreen extends StatefulWidget {
 
 class _NetworkScreenState extends State<NetworkScreen> {
   final _service = NetworkService();
+  StreamSubscription<ConnectivityResult>? _connSub;
   bool _loading = false;
   List<Finding> _findings = [];
   Map<String, String> _connInfo = {};
@@ -23,15 +26,30 @@ class _NetworkScreenState extends State<NetworkScreen> {
   void initState() {
     super.initState();
     _refresh();
-    Connectivity().onConnectivityChanged.listen((result) => _onConnChange([result]));
+    _initConnectivityState();
+    _connSub = Connectivity().onConnectivityChanged.listen(_onConnChange);
   }
 
-  void _onConnChange(List<ConnectivityResult> result) {
+  @override
+  void dispose() {
+    _connSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initConnectivityState() async {
+    final conn = await Connectivity().checkConnectivity();
+    if (!mounted) return;
+    _onConnChange(conn);
+  }
+
+  void _onConnChange(ConnectivityResult result) {
     setState(() {
-      _connectivityStatus = result.contains(ConnectivityResult.wifi)
+      _connectivityStatus = result == ConnectivityResult.wifi
           ? 'WiFi'
-          : result.contains(ConnectivityResult.mobile)
+          : result == ConnectivityResult.mobile
               ? 'بيانات الجوال'
+              : result == ConnectivityResult.vpn
+                  ? 'VPN'
               : 'غير متصل';
     });
   }

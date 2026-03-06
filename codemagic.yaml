@@ -23,19 +23,18 @@ workflows:
           cd ios
           pod install --repo-update
 
-      - name: Build iOS IPA (no code signing — for sideload)
+      - name: Build iOS IPA (unsigned, sideload-ready)
         script: |
-          flutter build ios --release --no-codesign
-          
-          # Package manually
-          mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r iPhoneSecurityChecker.ipa Payload
-          rm -rf Payload
+          flutter build ipa --release --no-codesign
+
+      - name: Normalize IPA artifact name
+        script: |
+          ls -la build/ios/ipa
+          cp build/ios/ipa/*.ipa iphone_security_checker_unsigned.ipa
 
     artifacts:
-      - iPhoneSecurityChecker.ipa
-      - build/ios/iphoneos/**/*.app
+      - iphone_security_checker_unsigned.ipa
+      - build/ios/ipa/*.ipa
 
     publishing:
       email:

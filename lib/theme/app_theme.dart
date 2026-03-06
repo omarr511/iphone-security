@@ -32,7 +32,6 @@ class AppTheme {
       primary: accent,
       secondary: green,
       surface: bg2,
-      background: bg,
       error: red,
     ),
     textTheme: GoogleFonts.notoSansArabicTextTheme(

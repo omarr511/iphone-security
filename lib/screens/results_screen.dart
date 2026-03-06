@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:share_plus/share_plus.dart';
@@ -7,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../theme/app_theme.dart';
 import '../models/finding.dart';
+import '../services/report_service.dart';
 import 'home_screen.dart';
 
 class ResultsScreen extends StatefulWidget {
@@ -20,6 +20,7 @@ class ResultsScreen extends StatefulWidget {
 class _ResultsScreenState extends State<ResultsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final _reportService = ReportService();
 
   @override
   void initState() {
@@ -319,6 +320,36 @@ class _ResultsScreenState extends State<ResultsScreen>
 
   // ── Export / Share ────────────────────────────────────────────
   Future<void> _shareReport() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('جاري تجهيز التقرير …')),
+    );
+
+    try {
+      final pdfFile = await _reportService.generatePdfReport(widget.result);
+      await Share.shareXFiles(
+        [XFile(pdfFile.path)],
+        subject: 'Security Report',
+        text: 'تقرير فحص الأمان (PDF)',
+      );
+      return;
+    } catch (_) {
+      // Fallback to text report below.
+    }
+
+    final textReport = _buildTextReport();
+    try {
+      final dir  = await getTemporaryDirectory();
+      final file = File('${dir.path}/security_report.txt');
+      await file.writeAsString(textReport);
+      await Share.shareXFiles([XFile(file.path)],
+          text: 'تقرير فحص الأمان من iPhone Security Checker');
+    } catch (_) {
+      await Share.share(textReport, subject: 'تقرير فحص الأمان');
+    }
+  }
+
+  String _buildTextReport() {
     final r = widget.result;
     final buffer = StringBuffer();
     buffer.writeln('═' * 40);
@@ -334,17 +365,7 @@ class _ResultsScreenState extends State<ResultsScreen>
       buffer.writeln('   ${f.message}');
     }
     buffer.writeln('═' * 40);
-
-    try {
-      final dir  = await getTemporaryDirectory();
-      final file = File('${dir.path}/security_report.txt');
-      await file.writeAsString(buffer.toString());
-      await Share.shareXFiles([XFile(file.path)],
-          text: 'تقرير فحص الأمان من iPhone Security Checker');
-    } catch (e) {
-      await Share.share(buffer.toString(),
-          subject: 'تقرير فحص الأمان');
-    }
+    return buffer.toString();
   }
 
   String _formatDate(DateTime d) =>

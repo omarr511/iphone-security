@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/services.dart';
 import '../models/finding.dart';
 
@@ -18,10 +17,12 @@ class PermissionService {
     'backgroundRefresh': 'تحديث الخلفية — يعمل عند قفل الجهاز',
   };
 
-  Future<List<Finding>> check() async {
+  Future<List<Finding>> check({bool mdmOnly = false}) async {
     final findings = <Finding>[];
-    findings.addAll(await _checkAppPermissions());
-    findings.addAll(await _checkBackgroundActivity());
+    if (!mdmOnly) {
+      findings.addAll(await _checkAppPermissions());
+      findings.addAll(await _checkBackgroundActivity());
+    }
     findings.addAll(await _checkConfigProfiles());
     findings.addAll(await _checkMdm());
     return findings;
@@ -57,6 +58,17 @@ class PermissionService {
           )
         ];
       }
+
+      if (apps.isNotEmpty) {
+        return [
+          Finding(
+            severity: Severity.info,
+            category: 'الصلاحيات',
+            message: 'تمت مراجعة صلاحيات $apps.length تطبيق',
+            timestamp: DateTime.now(),
+          )
+        ];
+      }
       return [];
     } catch (_) {
       return [];
@@ -70,12 +82,20 @@ class PermissionService {
       final bgApps = List<String>.from(data['apps'] ?? []);
 
       if (bgApps.isNotEmpty) {
+        final highRisk = bgApps.where((name) {
+          final n = name.toLowerCase();
+          return n.contains('vpn') || n.contains('proxy') || n.contains('remote');
+        }).toList();
+
         return [
           Finding(
-            severity: Severity.medium,
+            severity: highRisk.isNotEmpty ? Severity.high : Severity.medium,
             category: 'نشاط الخلفية',
             message: '${bgApps.length} تطبيق يعمل في الخلفية',
-            details: {'apps': bgApps.join(', ')},
+            details: {
+              'apps': bgApps.join(', '),
+              if (highRisk.isNotEmpty) 'high_risk': highRisk.join(', '),
+            },
             timestamp: DateTime.now(),
           )
         ];
@@ -98,7 +118,7 @@ class PermissionService {
             .join(', ');
         return [
           Finding(
-            severity: Severity.high,
+            severity: Severity.critical,
             category: 'ملف تعريف تهيئة مثبّت',
             message: '${profiles.length} ملف Configuration Profile — قد يمنح تحكماً كاملاً',
             details: {'profiles': names},

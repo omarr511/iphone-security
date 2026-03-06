@@ -1,6 +1,7 @@
 ﻿import UIKit
 import Flutter
 import Network
+import CFNetwork
 import AVFoundation
 import Contacts
 import Photos
@@ -41,6 +42,7 @@ import Photos
                 case "getActiveConnections": self.getActiveConnections(result: result)
                 case "getVpnStatus":        self.getVpnStatus(result: result)
                 case "getDnsServers":       result(["servers": [String]()])
+                case "getProxyStatus":      result(self.getProxyStatus())
                 default: result(FlutterMethodNotImplemented)
                 }
             }
@@ -110,8 +112,16 @@ import Photos
     private func getActiveConnections(result: @escaping FlutterResult) {
         let monitor = NWPathMonitor()
         let queue = DispatchQueue(label: "com.security.network")
-        monitor.pathUpdateHandler = { path in
+        var didRespond = false
+
+        let respond: ([[String: Any]]) -> Void = { conns in
+            guard !didRespond else { return }
+            didRespond = true
             monitor.cancel()
+            DispatchQueue.main.async { result(["connections": conns]) }
+        }
+
+        monitor.pathUpdateHandler = { path in
             let conns: [[String: Any]] = path.availableInterfaces.map { iface in
                 var type = "Other"
                 switch iface.type {
@@ -122,22 +132,59 @@ import Photos
                 }
                 return ["interface": iface.name, "type": type, "remote": ""]
             }
-            DispatchQueue.main.async { result(["connections": conns]) }
+            respond(conns)
         }
         monitor.start(queue: queue)
+
+        queue.asyncAfter(deadline: .now() + 2.0) {
+            respond([])
+        }
     }
 
     private func getVpnStatus(result: @escaping FlutterResult) {
         let monitor = NWPathMonitor()
         let queue = DispatchQueue(label: "com.security.vpn")
-        monitor.pathUpdateHandler = { path in
+        var didRespond = false
+
+        let respond: (Bool) -> Void = { isVpn in
+            guard !didRespond else { return }
+            didRespond = true
             monitor.cancel()
-            let isVpn = path.availableInterfaces.contains { $0.type == .other }
             DispatchQueue.main.async {
                 result(["isVpn": isVpn, "vpnName": isVpn ? "VPN Active" : ""])
             }
         }
+
+        monitor.pathUpdateHandler = { path in
+            let isVpn = path.availableInterfaces.contains { $0.type == .other }
+            respond(isVpn)
+        }
         monitor.start(queue: queue)
+
+        queue.asyncAfter(deadline: .now() + 2.0) {
+            respond(false)
+        }
+    }
+
+    private func getProxyStatus() -> [String: Any] {
+        guard let settings = CFNetworkCopySystemProxySettings()?.takeRetainedValue() as? [String: Any] else {
+            return ["enabled": false, "host": "", "port": 0]
+        }
+
+        let httpEnabled = (settings[kCFNetworkProxiesHTTPEnable as String] as? NSNumber)?.boolValue ?? false
+        let httpsEnabled = (settings[kCFNetworkProxiesHTTPSEnable as String] as? NSNumber)?.boolValue ?? false
+        let host = (settings[kCFNetworkProxiesHTTPProxy as String] as? String)
+            ?? (settings[kCFNetworkProxiesHTTPSProxy as String] as? String)
+            ?? ""
+        let port = (settings[kCFNetworkProxiesHTTPPort as String] as? NSNumber)?.intValue
+            ?? (settings[kCFNetworkProxiesHTTPSPort as String] as? NSNumber)?.intValue
+            ?? 0
+
+        return [
+            "enabled": httpEnabled || httpsEnabled,
+            "host": host,
+            "port": port
+        ]
     }
 
     // MARK: - Permissions
@@ -167,6 +214,12 @@ import Photos
            let free = attrs[.systemFreeSize] as? Int64 {
             info["freeStorageGB"] = Double(free) / 1_073_741_824
         }
+
+        let proxy = getProxyStatus()
+        info["proxyEnabled"] = proxy["enabled"] as? Bool ?? false
+        info["proxyHost"] = proxy["host"] as? String ?? ""
+        info["isDeveloperMode"] = false
+
         UIDevice.current.isBatteryMonitoringEnabled = true
         let level = UIDevice.current.batteryLevel
         info["batteryLevel"] = level >= 0 ? Int(level * 100) : -1
