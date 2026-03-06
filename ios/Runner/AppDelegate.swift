@@ -6,21 +6,25 @@ import AVFoundation
 import Contacts
 import Photos
 
-@UIApplicationMain
-@objc class AppDelegate: FlutterAppDelegate {
+@main
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
 
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        GeneratedPluginRegistrant.register(with: self)
+        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
 
-        guard let controller = window?.rootViewController as? FlutterViewController else {
-            return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-        }
+    func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+        // Register plugins with the implicit engine.
+        GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+
+        // Create method channels using the engine's messenger.
+        let messenger = engineBridge.applicationRegistrar.messenger()
 
         // Jailbreak Channel
-        FlutterMethodChannel(name: "com.security.checker/jailbreak", binaryMessenger: controller.binaryMessenger)
+        FlutterMethodChannel(name: "com.security.checker/jailbreak", binaryMessenger: messenger)
             .setMethodCallHandler { [weak self] call, result in
                 guard let self = self else { return }
                 switch call.method {
@@ -35,7 +39,7 @@ import Photos
             }
 
         // Network Channel
-        FlutterMethodChannel(name: "com.security.checker/network", binaryMessenger: controller.binaryMessenger)
+        FlutterMethodChannel(name: "com.security.checker/network", binaryMessenger: messenger)
             .setMethodCallHandler { [weak self] call, result in
                 guard let self = self else { return }
                 switch call.method {
@@ -48,7 +52,7 @@ import Photos
             }
 
         // Permissions Channel
-        FlutterMethodChannel(name: "com.security.checker/permissions", binaryMessenger: controller.binaryMessenger)
+        FlutterMethodChannel(name: "com.security.checker/permissions", binaryMessenger: messenger)
             .setMethodCallHandler { [weak self] call, result in
                 guard let self = self else { return }
                 switch call.method {
@@ -65,7 +69,7 @@ import Photos
             }
 
         // System Channel
-        FlutterMethodChannel(name: "com.security.checker/system", binaryMessenger: controller.binaryMessenger)
+        FlutterMethodChannel(name: "com.security.checker/system", binaryMessenger: messenger)
             .setMethodCallHandler { [weak self] call, result in
                 guard let self = self else { return }
                 switch call.method {
@@ -73,8 +77,6 @@ import Photos
                 default: result(FlutterMethodNotImplemented)
                 }
             }
-
-        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
     // MARK: - Jailbreak
