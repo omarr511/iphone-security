@@ -6,77 +6,89 @@ import AVFoundation
 import Contacts
 import Photos
 
-@main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+@UIApplicationMain
+@objc class AppDelegate: FlutterAppDelegate {
+
+    // Keep strong references so channels stay alive.
+    private var jailbreakChannel: FlutterMethodChannel?
+    private var networkChannel:   FlutterMethodChannel?
+    private var permChannel:      FlutterMethodChannel?
+    private var systemChannel:    FlutterMethodChannel?
 
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
+        // Standard plugin registration.
+        GeneratedPluginRegistrant.register(with: self)
+
+        // Obtain the Flutter view controller created by the storyboard.
+        guard let controller = window?.rootViewController as? FlutterViewController else {
+            return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+        }
+
+        let messenger = controller.binaryMessenger
+
+        // ── Jailbreak Channel ───────────────────────────────────
+        jailbreakChannel = FlutterMethodChannel(
+            name: "com.security.checker/jailbreak", binaryMessenger: messenger)
+        jailbreakChannel?.setMethodCallHandler { [weak self] call, result in
+            guard let self = self else { return }
+            switch call.method {
+            case "deepJailbreakCheck":
+                result(self.deepJailbreakCheck())
+            case "checkUrlSchemes":
+                let schemes = (call.arguments as? [String: Any])?["schemes"] as? [String] ?? []
+                result(self.checkUrlSchemes(schemes))
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
+
+        // ── Network Channel ─────────────────────────────────────
+        networkChannel = FlutterMethodChannel(
+            name: "com.security.checker/network", binaryMessenger: messenger)
+        networkChannel?.setMethodCallHandler { [weak self] call, result in
+            guard let self = self else { return }
+            switch call.method {
+            case "getActiveConnections": self.getActiveConnections(result: result)
+            case "getVpnStatus":        self.getVpnStatus(result: result)
+            case "getDnsServers":       result(["servers": [String]()])
+            case "getProxyStatus":      result(self.getProxyStatus())
+            default: result(FlutterMethodNotImplemented)
+            }
+        }
+
+        // ── Permissions Channel ─────────────────────────────────
+        permChannel = FlutterMethodChannel(
+            name: "com.security.checker/permissions", binaryMessenger: messenger)
+        permChannel?.setMethodCallHandler { [weak self] call, result in
+            guard let self = self else { return }
+            switch call.method {
+            case "getAppPermissions":  result(self.getAppPermissions())
+            case "getMdmStatus":       result(self.getMdmStatus())
+            case "getBackgroundApps":
+                let enabled = UIApplication.shared.backgroundRefreshStatus == .available
+                result(["apps": enabled ? ["Background Refresh"] : []])
+            case "getConfigProfiles":
+                let exists = FileManager.default.fileExists(atPath: "/var/mobile/Library/ConfigurationProfiles")
+                result(["profiles": exists ? [["name": "Profiles found"]] : []])
+            default: result(FlutterMethodNotImplemented)
+            }
+        }
+
+        // ── System Channel ──────────────────────────────────────
+        systemChannel = FlutterMethodChannel(
+            name: "com.security.checker/system", binaryMessenger: messenger)
+        systemChannel?.setMethodCallHandler { [weak self] call, result in
+            guard let self = self else { return }
+            switch call.method {
+            case "getSystemInfo": result(self.getSystemInfo())
+            default: result(FlutterMethodNotImplemented)
+            }
+        }
+
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-    }
-
-    func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-        // Register plugins with the implicit engine.
-        GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-
-        // Create method channels using the engine's messenger.
-        let messenger = engineBridge.applicationRegistrar.messenger()
-
-        // Jailbreak Channel
-        FlutterMethodChannel(name: "com.security.checker/jailbreak", binaryMessenger: messenger)
-            .setMethodCallHandler { [weak self] call, result in
-                guard let self = self else { return }
-                switch call.method {
-                case "deepJailbreakCheck":
-                    result(self.deepJailbreakCheck())
-                case "checkUrlSchemes":
-                    let schemes = (call.arguments as? [String: Any])?["schemes"] as? [String] ?? []
-                    result(self.checkUrlSchemes(schemes))
-                default:
-                    result(FlutterMethodNotImplemented)
-                }
-            }
-
-        // Network Channel
-        FlutterMethodChannel(name: "com.security.checker/network", binaryMessenger: messenger)
-            .setMethodCallHandler { [weak self] call, result in
-                guard let self = self else { return }
-                switch call.method {
-                case "getActiveConnections": self.getActiveConnections(result: result)
-                case "getVpnStatus":        self.getVpnStatus(result: result)
-                case "getDnsServers":       result(["servers": [String]()])
-                case "getProxyStatus":      result(self.getProxyStatus())
-                default: result(FlutterMethodNotImplemented)
-                }
-            }
-
-        // Permissions Channel
-        FlutterMethodChannel(name: "com.security.checker/permissions", binaryMessenger: messenger)
-            .setMethodCallHandler { [weak self] call, result in
-                guard let self = self else { return }
-                switch call.method {
-                case "getAppPermissions":  result(self.getAppPermissions())
-                case "getMdmStatus":       result(self.getMdmStatus())
-                case "getBackgroundApps":
-                    let enabled = UIApplication.shared.backgroundRefreshStatus == .available
-                    result(["apps": enabled ? ["Background Refresh"] : []])
-                case "getConfigProfiles":
-                    let exists = FileManager.default.fileExists(atPath: "/var/mobile/Library/ConfigurationProfiles")
-                    result(["profiles": exists ? [["name": "Profiles found"]] : []])
-                default: result(FlutterMethodNotImplemented)
-                }
-            }
-
-        // System Channel
-        FlutterMethodChannel(name: "com.security.checker/system", binaryMessenger: messenger)
-            .setMethodCallHandler { [weak self] call, result in
-                guard let self = self else { return }
-                switch call.method {
-                case "getSystemInfo": result(self.getSystemInfo())
-                default: result(FlutterMethodNotImplemented)
-                }
-            }
     }
 
     // MARK: - Jailbreak
