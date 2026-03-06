@@ -171,17 +171,42 @@ import Photos
             return ["enabled": false, "host": "", "port": 0]
         }
 
-        let httpEnabled = (settings[kCFNetworkProxiesHTTPEnable as String] as? NSNumber)?.boolValue ?? false
-        let httpsEnabled = (settings[kCFNetworkProxiesHTTPSEnable as String] as? NSNumber)?.boolValue ?? false
-        let host = (settings[kCFNetworkProxiesHTTPProxy as String] as? String)
-            ?? (settings[kCFNetworkProxiesHTTPSProxy as String] as? String)
-            ?? ""
-        let port = (settings[kCFNetworkProxiesHTTPPort as String] as? NSNumber)?.intValue
-            ?? (settings[kCFNetworkProxiesHTTPSPort as String] as? NSNumber)?.intValue
-            ?? 0
+        func boolValue(_ key: String) -> Bool {
+            (settings[key] as? NSNumber)?.boolValue ?? false
+        }
+        func intValue(_ key: String) -> Int {
+            (settings[key] as? NSNumber)?.intValue ?? 0
+        }
+
+        // NOTE:
+        // Some CFNetwork proxy constants (e.g. kCFNetworkProxiesHTTPSEnable/HTTPSProxy/HTTPSPort)
+        // are macOS-only and are marked unavailable on iOS.
+        // Using the raw string keys keeps this iOS-safe and still lets us detect configured proxies.
+        let httpEnabled  = boolValue("HTTPEnable")
+        let httpsEnabled = boolValue("HTTPSEnable")
+        let socksEnabled = boolValue("SOCKSEnable")
+        let pacEnabled   = boolValue("ProxyAutoConfigEnable") || boolValue("ProxyAutoDiscoveryEnable")
+
+        var host = ""
+        var port = 0
+
+        if httpEnabled {
+            host = (settings["HTTPProxy"] as? String) ?? ""
+            port = intValue("HTTPPort")
+        } else if httpsEnabled {
+            host = (settings["HTTPSProxy"] as? String) ?? ""
+            port = intValue("HTTPSPort")
+        } else if socksEnabled {
+            host = (settings["SOCKSProxy"] as? String) ?? ""
+            port = intValue("SOCKSPort")
+        } else if pacEnabled {
+            // PAC uses a URL string instead of host/port.
+            host = (settings["ProxyAutoConfigURLString"] as? String) ?? ""
+            port = 0
+        }
 
         return [
-            "enabled": httpEnabled || httpsEnabled,
+            "enabled": httpEnabled || httpsEnabled || socksEnabled || pacEnabled,
             "host": host,
             "port": port
         ]
